@@ -1,14 +1,13 @@
 from playground.network.packet import PacketType
 from playground.network.packet.fieldtypes import UINT16, STRING, BUFFER, BOOL, ListFieldType
 from playground.network.packet.fieldtypes.attributes import Optional
-
 import asyncio
 from playground.asyncio_lib.testing import TestLoopEx
 from playground.network.testing import MockTransportToStorageStream
 from playground.network.testing import MockTransportToProtocol
 
 
-
+#define four packets
 
 class CourseIDPacket(PacketType):
     DEFINITION_IDENTIFIER = "lab2b.yliu.CourseID"
@@ -44,9 +43,11 @@ class RegisterResultPacket(PacketType):
         ("result", STRING)  # enrolled, waitlist, failed
     ]
 
+#server protocol
 class ServerProtocol(asyncio.Protocol):
     def __init__(self):
         self.transport = None
+        #this is a courselist, server has to find course information in this list.
         courselist = []
         courselist.append({'cid': b'EN.601.644', 'cname': 'network security', 'enrollmentlimit': 60, 'enrolled': 60})
         courselist.append({'cid': b'EN.500.603', 'cname': 'academic ethics', 'enrollmentlimit': -1, 'enrolled': 500})
@@ -63,16 +64,16 @@ class ServerProtocol(asyncio.Protocol):
         self._deserializer.update(data)
         for p in self._deserializer.nextPackets():
             if isinstance(p,CourseIDPacket):
-                if self.state != 0 :
+                if self.state != 0 : #only 0 state is waiting for CourseIDPacket
                     print('Server: Wrong state')
                     print('Server: Close the client socket')
                     self.transport.close()
-                self.state = 1
+                self.state = 1 #1 state is waiting for RegisterPacket(Packet3)
                 print('Server: Packet1 received:')
                 print(p)
                 packet2 = CourseNamePacket()
                 packet2.cid = p.cid
-                findcourse=0
+                findcourse=0 
                 for c in self.courselist :
                     if c['cid'] == p.cid :
                         packet2.cname = c['cname']
@@ -89,11 +90,11 @@ class ServerProtocol(asyncio.Protocol):
                     print('Server: Close the client socket')
                     self.transport.close()
             elif isinstance(p,RegisterPacket):
-                if self.state !=1 :
+                if self.state !=1 : #Only 1 state is waiting for RegisterPacket(Packet3)
                     print('Server: Wrong state')
                     print('Server: Close the client socket')
                     self.transport.close()
-                self.state = 2
+                self.state = 2 #this is the final state. It does not wait for any packet.
                 print('Server: Packet3 received')
                 print(p)
                 packet4 = RegisterResultPacket()
@@ -101,14 +102,14 @@ class ServerProtocol(asyncio.Protocol):
                 for c in self.courselist :
                     findcourse = 1
                     if c['cid'] == p.cid :
-                        if c['enrollmentlimit'] == -1:
+                        if c['enrollmentlimit'] == -1:  #-1 means there is no limit, so result will always be enrolled
                             packet4.result = 'enrolled'
                         elif c['enrolled'] < c['enrollmentlimit']:
                             packet4.result = 'enrolled'
-                        elif c['enrolled'] >= c['enrollmentlimit'] and p.waitlist :
+                        elif c['enrolled'] >= c['enrollmentlimit'] and p.waitlist : #when class is full and waitlist is True -> waitlist
                             packet4.result = 'waitlist'
                         else:
-                            packet4.result = 'failed'
+                            packet4.result = 'failed' #when class is full and waitlist is False -> failed
                         break
                 if findcourse == 1 :
                     packet4.sid = p.sid
@@ -134,7 +135,7 @@ class ClientProtocol(asyncio.Protocol):
         self.transport = transport
 
 
-    def sendpkt1(self, sid, cid, waitlist):
+    def sendpkt1(self, sid, cid, waitlist): #this is used to send the first packet
         self.sid = sid
         self.cid = cid
         self.waitlist = waitlist
@@ -183,8 +184,9 @@ def basicUnitTest():
         server.connection_made(transportToClient)
         client.sendpkt1(b"ABC123",b"EN.601.644",True)
 
-
-
+#this is an example of normal input and normal procedure.
+#I also tried the situation when client sent packet1 packet1 packet1, and my server protocol is able to find out and close the connection.
+#I also tried the situation when courseID does not exist, and my server protocol is able to find out and close the connection.
 
 
 if __name__=="__main__":
